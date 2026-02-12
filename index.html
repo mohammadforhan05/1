@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5">
+  <title>finwise • premium expense tracker</title>
+  <!-- Tailwind via CDN + smooth base -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome 6 (free) for crisp icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <!-- Chart.js for pie & line -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <style>
+    /* glassmorphism polish, custom animations, date grouping aesthetics */
+    body {
+      background: linear-gradient(145deg, #f1f5f9 0%, #e6edf5 100%);
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      transition: background 0.3s ease;
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.5);
+      border-radius: 28px;
+      box-shadow: 0 20px 35px -8px rgba(0,0,0,0.05), 0 0 0 1px rgba(255,255,255,0.3) inset;
+    }
+    .soft-indigo { background: rgba(224, 231, 255, 0.6); }   /* indigo soft */
+    .soft-emerald { background: rgba(209, 250, 229, 0.5); }  /* emerald soft */
+    .soft-rose { background: rgba(255, 228, 230, 0.55); }    /* rose soft */
+    .card-hover {
+      transition: all 0.25s cubic-bezier(0.2,0,0,1);
+    }
+    .card-hover:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 25px 40px -10px rgba(79, 70, 229, 0.1);
+      border-color: rgba(99,102,241,0.2);
+    }
+    .btn-premium {
+      background: white;
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(203,213,225,0.5);
+      border-radius: 40px;
+      padding: 0.5rem 1.25rem;
+      font-weight: 500;
+      transition: all 0.18s ease;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+    }
+    .btn-premium:hover {
+      background: rgba(255,255,255,0.9);
+      border-color: #818cf8;
+      color: #4338ca;
+      box-shadow: 0 8px 18px rgba(79,70,229,0.15);
+    }
+    .transaction-item {
+      background: rgba(255,255,255,0.5);
+      border-radius: 18px;
+      padding: 0.9rem 1.2rem;
+      margin-bottom: 0.6rem;
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255,255,255,0.7);
+      transition: all 0.2s ease;
+    }
+    .transaction-item:hover {
+      background: white;
+      border-color: #c7d2fe;
+    }
+    .date-badge {
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      background: rgba(99,102,241,0.08);
+      border-radius: 30px;
+      padding: 0.3rem 1rem;
+      display: inline-block;
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(99,102,241,0.15);
+      color: #1e1b4b;
+    }
+    .fade-slide {
+      animation: fadeSlide 0.3s ease-out;
+    }
+    @keyframes fadeSlide {
+      0% { opacity: 0.6; transform: translateY(6px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    input, select {
+      background: rgba(255,255,255,0.7);
+      border: 1px solid #e2e8f0;
+      border-radius: 22px;
+      padding: 0.65rem 1.2rem;
+      outline: none;
+      transition: 0.2s;
+      font-size: 0.95rem;
+    }
+    input:focus, select:focus {
+      border-color: #818cf8;
+      box-shadow: 0 0 0 3px rgba(129,140,248,0.2);
+      background: white;
+    }
+    .pie-chart-container, .line-chart-container {
+      background: rgba(255,255,255,0.5);
+      backdrop-filter: blur(8px);
+      border-radius: 26px;
+      padding: 1.25rem;
+      border: 1px solid rgba(255,255,255,0.8);
+    }
+    .export-btn {
+      background: #1e293b;
+      color: white;
+      border-radius: 40px;
+      padding: 0.5rem 1.5rem;
+      font-size: 0.9rem;
+      border: none;
+      transition: 0.2s;
+    }
+    .export-btn:hover { background: #0f172a; }
+    i { color: #4f46e5; }
+  </style>
+</head>
+<body class="antialiased p-5 md:p-8 font-sans">
+
+  <!-- MAIN WRAPPER: glassmorphism container -->
+  <div class="max-w-7xl mx-auto space-y-7">
+
+    <!-- ========== USER IDENTITY + GREETING ========== -->
+    <div class="glass-card p-6 flex flex-wrap items-center justify-between gap-4 fade-slide">
+      <div class="flex items-center gap-3">
+        <i class="fas fa-user-circle text-3xl text-indigo-400"></i>
+        <div class="flex items-center flex-wrap gap-2">
+          <span class="text-slate-600 text-lg font-light">Hello,</span>
+          <!-- Editable name span, double‑click or click pencil to edit -->
+          <span id="userNameDisplay" class="text-2xl font-semibold text-indigo-800 px-1 capitalize">there</span>
+          <button id="editNameBtn" class="ml-1 text-indigo-500 hover:text-indigo-700 transition">
+            <i class="fas fa-pen-fair text-sm"></i>
+          </button>
+        </div>
+      </div>
+      <div class="text-sm text-slate-500 bg-white/50 px-4 py-2 rounded-full">
+        <i class="fas fa-calendar-alt mr-1 text-emerald-500"></i> 
+        <span id="currentDate"></span>
+      </div>
+    </div>
+
+    <!-- ========== DASHBOARD SUMMARY CARDS ========== -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <!-- total income card -->
+      <div class="glass-card p-6 flex items-center card-hover soft-emerald">
+        <div class="bg-white p-3 rounded-2xl shadow-sm mr-4"><i class="fas fa-arrow-down text-emerald-600 text-xl"></i></div>
+        <div>
+          <p class="text-xs uppercase tracking-wider text-slate-500">Total Income</p>
+          <h3 id="totalIncomeVal" class="text-3xl font-bold text-slate-800">$0.00</h3>
+        </div>
+      </div>
+      <!-- total expense card -->
+      <div class="glass-card p-6 flex items-center card-hover soft-rose">
+        <div class="bg-white p-3 rounded-2xl shadow-sm mr-4"><i class="fas fa-arrow-up text-rose-500 text-xl"></i></div>
+        <div>
+          <p class="text-xs uppercase tracking-wider text-slate-500">Total Expense</p>
+          <h3 id="totalExpenseVal" class="text-3xl font-bold text-slate-800">$0.00</h3>
+        </div>
+      </div>
+      <!-- current balance card -->
+      <div class="glass-card p-6 flex items-center card-hover soft-indigo">
+        <div class="bg-white p-3 rounded-2xl shadow-sm mr-4"><i class="fas fa-wallet text-indigo-600 text-xl"></i></div>
+        <div>
+          <p class="text-xs uppercase tracking-wider text-slate-500">Balance</p>
+          <h3 id="balanceVal" class="text-3xl font-bold text-slate-800">$0.00</h3>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== ADD TRANSACTION FORM (PREMIUM) ========== -->
+    <div class="glass-card p-6 md:p-7">
+      <h2 class="text-base font-semibold text-indigo-800 mb-4 flex items-center"><i class="fas fa-plus-circle mr-2"></i> Record new transaction</h2>
+      <div class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+        <div class="md:col-span-1">
+          <label class="block text-xs text-slate-500 mb-1">Title</label>
+          <input type="text" id="titleInput" placeholder="e.g. Grocery" class="w-full">
+        </div>
+        <div class="md:col-span-1">
+          <label class="block text-xs text-slate-500 mb-1">Amount ($)</label>
+          <input type="number" id="amountInput" placeholder="0.00" step="0.01" min="0" class="w-full">
+        </div>
+        <div class="md:col-span-1">
+          <label class="block text-xs text-slate-500 mb-1">Category</label>
+          <select id="categorySelect" class="w-full">
+            <option value="Food">🍔 Food</option>
+            <option value="Rent">🏠 Rent</option>
+            <option value="Salary">💼 Salary</option>
+            <option value="Transport">🚗 Transport</option>
+            <option value="Shopping">🛍️ Shopping</option>
+            <option value="Other">✨ Other</option>
+          </select>
+        </div>
+        <div class="md:col-span-1">
+          <label class="block text-xs text-slate-500 mb-1">Type</label>
+          <select id="typeSelect" class="w-full">
+            <option value="income">💰 Income</option>
+            <option value="expense" selected>💸 Expense</option>
+          </select>
+        </div>
+        <div class="md:col-span-1">
+          <label class="block text-xs text-slate-500 mb-1">Date</label>
+          <input type="date" id="dateInput" class="w-full">
+        </div>
+        <div class="md:col-span-1">
+          <button id="addTransactionBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white w-full py-3 px-4 rounded-2xl shadow-md transition font-medium flex items-center justify-center gap-2">
+            <i class="fas fa-plus text-sm"></i> Add
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== CHART AREA (PIE + LINE) ========== -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-7">
+      <!-- pie chart: category wise -->
+      <div class="pie-chart-container">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-medium text-slate-700"><i class="fas fa-chart-pie mr-1 text-indigo-500"></i> Expenses by category</span>
+          <span class="text-xs bg-white/70 px-3 py-1 rounded-full text-slate-500">current month</span>
+        </div>
+        <canvas id="pieChart" style="max-height: 220px; width:100%;"></canvas>
+      </div>
+      <!-- line chart: spending trends -->
+      <div class="line-chart-container">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-medium text-slate-700"><i class="fas fa-chart-line mr-1 text-emerald-600"></i> daily expense trend</span>
+          <span class="text-xs bg-white/70 px-3 py-1 rounded-full text-slate-500">last 7 days</span>
+        </div>
+        <canvas id="lineChart" style="max-height: 220px; width:100%;"></canvas>
+      </div>
+    </div>
+
+    <!-- ========== DAILY GROUPING (TRANSACTIONS) ========== -->
+    <div class="glass-card p-6">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <h2 class="text-lg font-semibold text-indigo-900 flex items-center"><i class="fas fa-list-ul mr-2"></i> Transactions by day</h2>
+        <div class="flex gap-3">
+          <!-- EXPORT EXCEL BUTTON -->
+          <button id="exportCsvBtn" class="export-btn flex items-center gap-2 text-sm"><i class="fas fa-file-excel text-white"></i> Export CSV</button>
+        </div>
+      </div>
+      <!-- transaction list grouped by date (dynamic) -->
+      <div id="transactionsContainer" class="space-y-5 max-h-[420px] overflow-y-auto pr-1">
+        <!-- will be populated via JS -->
+      </div>
+      <div id="noTransactionMsg" class="text-center py-8 text-slate-400 hidden">✨ No transactions yet. Add one above.</div>
+    </div>
+
+    <!-- ========== SMART BUDGET TIPS ========== -->
+    <div class="glass-card p-6 bg-white/40">
+      <div class="flex items-start gap-3">
+        <i class="fas fa-lightbulb text-2xl text-amber-500"></i>
+        <div>
+          <h3 class="font-semibold text-slate-800 text-md">💡 smart budget tip</h3>
+          <p id="budgetTipMessage" class="text-slate-600 text-sm mt-1 leading-relaxed pr-4">Add transactions to receive personalized saving insights.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      "use strict";
+
+      // ---------- GLOBAL STATE & LOCAL STORAGE ----------
+      let transactions = [];
+      let userName = "there";
+
+      // Chart instances
+      let pieChartInstance = null;
+      let lineChartInstance = null;
+
+      // DOM elements
+      const userNameSpan = document.getElementById('userNameDisplay');
+      const editNameBtn = document.getElementById('editNameBtn');
+      const totalIncomeEl = document.getElementById('totalIncomeVal');
+      const totalExpenseEl = document.getElementById('totalExpenseVal');
+      const balanceEl = document.getElementById('balanceVal');
+      const transactionsContainer = document.getElementById('transactionsContainer');
+      const noTransactionMsg = document.getElementById('noTransactionMsg');
+      const titleInput = document.getElementById('titleInput');
+      const amountInput = document.getElementById('amountInput');
+      const categorySelect = document.getElementById('categorySelect');
+      const typeSelect = document.getElementById('typeSelect');
+      const dateInput = document.getElementById('dateInput');
+      const addBtn = document.getElementById('addTransactionBtn');
+      const exportBtn = document.getElementById('exportCsvBtn');
+      const tipParagraph = document.getElementById('budgetTipMessage');
+
+      // ---------- INIT / LOAD FROM LOCALSTORAGE ----------
+      function loadFromStorage() {
+        // load transactions
+        const storedTx = localStorage.getItem('finwise_transactions');
+        if (storedTx) {
+          try {
+            transactions = JSON.parse(storedTx);
+          } catch (e) { transactions = []; }
+        } else {
+          // sample starter data for beauty & demonstration
+          const today = new Date();
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          const twoDaysAgo = new Date(today);
+          twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+          
+          transactions = [
+            { id: '1', title: 'Groceries', amount: 58.75, category: 'Food', type: 'expense', date: yesterday.toISOString().split('T')[0] },
+            { id: '2', title: 'Salary', amount: 3200, category: 'Salary', type: 'income', date: twoDaysAgo.toISOString().split('T')[0] },
+            { id: '3', title: 'Dinner', amount: 42.5, category: 'Food', type: 'expense', date: today.toISOString().split('T')[0] },
+            { id: '4', title: 'Uber', amount: 24.8, category: 'Transport', type: 'expense', date: yesterday.toISOString().split('T')[0] },
+          ];
+        }
+
+        // load user name
+        const storedName = localStorage.getItem('finwise_userName');
+        if (storedName) {
+          userName = storedName;
+          userNameSpan.textContent = userName;
+        } else {
+          userNameSpan.textContent = 'there';
+        }
+
+        // default date picker = today
+        if (dateInput) {
+          const todayStr = new Date().toISOString().split('T')[0];
+          dateInput.value = todayStr;
+        }
+      }
+
+      // ---------- PERSISTENCE ----------
+      function saveTransactions() {
+        localStorage.setItem('finwise_transactions', JSON.stringify(transactions));
+      }
+      function saveUserName(name) {
+        localStorage.setItem('finwise_userName', name);
+        userName = name;
+        userNameSpan.textContent = name;
+      }
+
+      // ---------- EDIT USER NAME (premium double‑click + pencil) ----------
+      function enableNameEdit() {
+        const current = userNameSpan.textContent;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = current;
+        input.className = 'text-2xl font-semibold text-indigo-800 bg-transparent border-b-2 border-indigo-300 outline-none w-40';
+        userNameSpan.replaceWith(input);
+        input.focus();
+        input.addEventListener('blur', function() {
+          let newName = input.value.trim() || 'there';
+          saveUserName(newName);
+          // rebuild display span
+          const newSpan = document.createElement('span');
+          newSpan.id = 'userNameDisplay';
+          newSpan.className = 'text-2xl font-semibold text-indigo-800 px-1 capitalize';
+          newSpan.textContent = newName;
+          input.replaceWith(newSpan);
+          // reassign global reference
+          userNameSpan = newSpan;
+          // re-attach listener to edit button (closure)
+          attachNameEditListeners();
+        });
+        input.addEventListener('keypress', (e) => { if (e.key === 'Enter') input.blur(); });
+      }
+
+      // attach listener to current edit button + name double click
+      function attachNameEditListeners() {
+        const displaySpan = document.getElementById('userNameDisplay');
+        if (displaySpan) {
+          displaySpan.ondblclick = enableNameEdit;
+        }
+        if (editNameBtn) {
+          editNameBtn.onclick = enableNameEdit;
+        }
+      }
+
+      // ---------- MATH: totals & balance ----------
+      function computeTotals() {
+        let income = 0, expense = 0;
+        transactions.forEach(t => {
+          if (t.type === 'income') income += Number(t.amount);
+          else expense += Number(t.amount);
+        });
+        return { income, expense, balance: income - expense };
+      }
+
+      // ---------- UI: update summary cards ----------
+      function updateSummaryUI() {
+        const totals = computeTotals();
+        totalIncomeEl.textContent = `$${totals.income.toFixed(2)}`;
+        totalExpenseEl.textContent = `$${totals.expense.toFixed(2)}`;
+        balanceEl.textContent = `$${totals.balance.toFixed(2)}`;
+      }
+
+      // ---------- GROUP TRANSACTIONS BY DATE (desc) ----------
+      function groupByDate(transactionsArray) {
+        const grouped = {};
+        transactionsArray.forEach(t => {
+          if (!grouped[t.date]) grouped[t.date] = [];
+          grouped[t.date].push(t);
+        });
+        // sort dates descending (newest first)
+        return Object.keys(grouped).sort((a,b) => new Date(b) - new Date(a)).map(date => ({
+          date,
+          transactions: grouped[date].sort((x,y) => x.type === 'expense' ? -1 : 1) // show expense first
+        }));
+      }
+
+      // ---------- RENDER DAILY GROUPED TRANSACTIONS (with remove button & animation) ----------
+      function renderTransactions() {
+        if (transactions.length === 0) {
+          transactionsContainer.innerHTML = '';
+          noTransactionMsg.classList.remove('hidden');
+          return;
+        }
+        noTransactionMsg.classList.add('hidden');
+        
+        const groups = groupByDate(transactions);
+        let html = '';
+        groups.forEach(group => {
+          html += `<div class="fade-slide">`;
+          html += `<div class="date-badge mb-2"><i class="far fa-calendar-alt mr-1"></i> ${formatDate(group.date)} • total $${group.transactions.reduce((acc, t) => t.type==='expense'? acc+Number(t.amount): acc, 0).toFixed(2)} spent</div>`;
+          group.transactions.forEach(tx => {
+            const sign = tx.type === 'income' ? '+' : '-';
+            const color = tx.type === 'income' ? 'text-emerald-700' : 'text-rose-600';
+            html += `<div class="transaction-item flex justify-between items-center" data-id="${tx.id}">
+                        <div class="flex items-center gap-3">
+                          <i class="fas ${tx.type==='income'? 'fa-circle-up text-emerald-400' : 'fa-circle-down text-rose-400'}"></i>
+                          <div><span class="font-medium text-slate-800">${tx.title}</span> 
+                            <span class="text-xs bg-slate-200/70 px-2 py-1 rounded-full ml-2">${tx.category}</span>
+                          </div>
+                        </div>
+                        <div class="flex items-center gap-4">
+                          <span class="font-mono font-semibold ${color}">${sign}$${Number(tx.amount).toFixed(2)}</span>
+                          <button class="delete-btn text-slate-400 hover:text-rose-600 transition" data-id="${tx.id}"><i class="fas fa-trash-alt"></i></button>
+                        </div>
+                      </div>`;
+          });
+          html += `</div>`;
+        });
+        transactionsContainer.innerHTML = html;
+
+        // attach delete listeners (smooth removal)
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+          btn.addEventListener('click', function(e) {
+            const id = this.dataset.id;
+            const txElement = this.closest('.transaction-item');
+            txElement.style.transition = 'opacity 0.2s, transform 0.2s';
+            txElement.style.opacity = '0';
+            txElement.style.transform = 'translateX(10px)';
+            setTimeout(() => {
+              transactions = transactions.filter(t => t.id !== id);
+              saveTransactions();
+              fullRefresh();
+            }, 200);
+          });
+        });
+      }
+
+      function formatDate(dateStr) {
+        const opt = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+        return new Date(dateStr).toLocaleDateString(undefined, opt);
+      }
+
+      // ---------- CHARTS (PIE: category expense, LINE: daily total expense) ----------
+      function renderCharts() {
+        // --- PIE CHART: expense grouped by category ---
+        const expenseByCategory = {};
+        transactions.filter(t => t.type === 'expense').forEach(t => {
+          expenseByCategory[t.category] = (expenseByCategory[t.category] || 0) + Number(t.amount);
+        });
+        const categories = Object.keys(expenseByCategory);
+        const catValues = Object.values(expenseByCategory);
+        
+        const pieCtx = document.getElementById('pieChart').getContext('2d');
+        if (pieChartInstance) pieChartInstance.destroy();
+        if (categories.length === 0) {
+          pieChartInstance = new Chart(pieCtx, { type: 'pie', data: { labels: ['No expense'], datasets: [{ data: [1], backgroundColor: ['#e2e8f0'] }] } });
+        } else {
+          pieChartInstance = new Chart(pieCtx, {
+            type: 'pie',
+            data: {
+              labels: categories,
+              datasets: [{
+                data: catValues,
+                backgroundColor: ['#818cf8', '#34d399', '#f472b6', '#fbbf24', '#94a3b8', '#a78bfa'],
+                borderWidth: 2,
+                borderColor: 'white'
+              }]
+            },
+            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
+          });
+        }
+
+        // --- LINE CHART: last 7 days expense trend ---
+        const last7Dates = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          last7Dates.push(d.toISOString().split('T')[0]);
+        }
+        const dailyExpense = last7Dates.map(date => 
+          transactions.filter(t => t.date === date && t.type === 'expense').reduce((acc, cur) => acc + Number(cur.amount), 0)
+        );
+        const lineCtx = document.getElementById('lineChart').getContext('2d');
+        if (lineChartInstance) lineChartInstance.destroy();
+        lineChartInstance = new Chart(lineCtx, {
+          type: 'line',
+          data: {
+            labels: last7Dates.map(d => new Date(d).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })),
+            datasets: [{
+              label: 'expense $',
+              data: dailyExpense,
+              borderColor: '#f43f5e',
+              backgroundColor: 'rgba(244,114,182,0.05)',
+              tension: 0.2,
+              pointBackgroundColor: '#fb7185',
+              borderWidth: 2.5,
+              fill: true
+            }]
+          },
+          options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
+        });
+      }
+
+      // ---------- SMART BUDGET TIPS (based on patterns) ----------
+      function generateTip() {
+        const totals = computeTotals();
+        if (transactions.length === 0) {
+          tipParagraph.textContent = "✨ Start tracking to receive personalised saving tips.";
+          return;
+        }
+        const expenseByCat = {};
+        transactions.filter(t => t.type === 'expense').forEach(t => { expenseByCat[t.category] = (expenseByCat[t.category]||0) + Number(t.amount); });
+        let maxCat = '', maxAmt = 0;
+        for (let [cat, amt] of Object.entries(expenseByCat)) { if (amt > maxAmt) { maxAmt = amt; maxCat = cat; } }
+        
+        if (totals.balance < 100) tipParagraph.textContent = "⚠️ Balance running low. Consider reducing 'Other' expenses this week.";
+        else if (maxCat === 'Food' && maxAmt > 150) tipParagraph.textContent = "🍽️ You spent a lot on food. Try meal prepping to save ~$40/week.";
+        else if (maxCat === 'Transport') tipParagraph.textContent = "🚲 Short trips? Bike or walk to save on transport and stay fit.";
+        else if (totals.income > 0 && totals.expense > totals.income * 0.7) tipParagraph.textContent = "📈 Your expense exceeds 70% of income. Aim to save 30% rule.";
+        else tipParagraph.textContent = "💎 You're managing well. Keep tracking to build wealth!";
+      }
+
+      // ---------- ADD NEW TRANSACTION ----------
+      function addTransaction() {
+        const title = titleInput.value.trim();
+        const amount = parseFloat(amountInput.value);
+        const category = categorySelect.value;
+        const type = typeSelect.value;
+        let date = dateInput.value;
+        if (!title || isNaN(amount) || amount <= 0) { alert('Please fill all fields'); return; }
+        if (!date) date = new Date().toISOString().split('T')[0];
+        const newTx = {
+          id: Date.now() + '' + Math.floor(Math.random() * 1000),
+          title,
+          amount,
+          category,
+          type,
+          date
+        };
+        transactions.push(newTx);
+        saveTransactions();
+        fullRefresh();
+        // clear inputs
+        titleInput.value = '';
+        amountInput.value = '';
+        typeSelect.value = 'expense';
+        dateInput.value = new Date().toISOString().split('T')[0];
+      }
+
+      // ---------- EXPORT CSV (EXCEL) ----------
+      function exportToCsv() {
+        if (transactions.length === 0) { alert('No transactions to export'); return; }
+        let csv = 'Title,Amount,Category,Type,Date\n';
+        transactions.forEach(t => {
+          csv += `${t.title},${t.amount},${t.category},${t.type},${t.date}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `finwise_export_${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      }
+
+      // ---------- FULL REFRESH: all UI, charts, tips ----------
+      function fullRefresh() {
+        updateSummaryUI();
+        renderTransactions();
+        renderCharts();
+        generateTip();
+      }
+
+      // ---------- INITIALISATION ----------
+      function init() {
+        loadFromStorage();
+        fullRefresh();
+        attachNameEditListeners();
+        // set today date
+        if (dateInput && !dateInput.value) dateInput.value = new Date().toISOString().split('T')[0];
+
+        // listeners
+        addBtn.addEventListener('click', addTransaction);
+        exportBtn.addEventListener('click', exportToCsv);
+
+        // live date on greeting
+        document.getElementById('currentDate').textContent = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      }
+
+      init();
+      // for proper userNameSpan reference reassign after edit
+      let userNameSpan = document.getElementById('userNameDisplay');
+    })();
+  </script>
+  <!-- small extra comment: pure glass, no framework -->
+</body>
+</html>
